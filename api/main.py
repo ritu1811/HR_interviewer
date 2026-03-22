@@ -9,7 +9,7 @@ from flask_cors import CORS
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173"])
+CORS(app, origins=["http://localhost:5173", "https://hrinterviewer.vercel.app/"])
 
 # 🔐 Gemini API Key (from Render environment variables or .env)
 api_key = os.getenv("GEMINI_API_KEY")
@@ -56,7 +56,7 @@ Response MUST start with [PASS] or [FAIL].
 # 🌐 Serve frontend
 @app.route("/")
 def home():
-    return send_from_directory('.', 'index.html')
+    return "Backend is running"
 
 # 🚀 Start interview
 @app.route("/api/start", methods=["POST"])
@@ -165,4 +165,4 @@ def chat():
 #     )
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
