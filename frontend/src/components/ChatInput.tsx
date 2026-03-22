@@ -29,7 +29,7 @@ const ChatInput: React.FC = () => {
       //   const API_URL = (import.meta as any).env.VITE_API_URL || '/api';
       const API_URL = "https://hr-interviewer-qgql.onrender.com"
       console.log("API URL: ", API_URL)
-      const response = await axios.post(`${API_URL}/chat`, {
+      const response = await axios.post(`${API_URL}/api/chat`, {
         session_id: sessionId,
         message: input,
       });
