@@ -2,27 +2,23 @@ from flask import Flask, request, jsonify, send_from_directory
 from uuid import uuid4
 import google.genai as genai
 import os
-from dotenv import load_dotenv
 from flask_cors import CORS
 
-load_dotenv()
-
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
-# 🔐 Gemini API Key
+# 🔐 Gemini API Key (from Render environment variables)
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     raise RuntimeError("GEMINI_API_KEY environment variable is required")
 
-# Configure client (new google.genai API style)
+# 🤖 Initialize Gemini client
 try:
     genai_client = genai.Client(api_key=api_key)
 except Exception as e:
     raise RuntimeError(f"Failed to initialize GenAI client: {e}")
 
-# ✅ Working model
-model_name = "gemini-2.5-flash"  # Use available model
+model_name = "gemini-2.5-flash"
 
 # 🧠 Session storage
 SESSIONS = {}
@@ -37,8 +33,8 @@ INTERVIEW_STEPS = [
     {"id": "Questions", "question": "Do you have any questions for us?"}
 ]
 
-# 🧠 Prompt
-def build_prompt(question, answer, history):
+# 🧠 Prompt builder
+def build_prompt(question, answer):
     return f"""
 You are a professional HR interviewer.
 
@@ -46,11 +42,11 @@ Question: {question}
 Candidate Answer: {answer}
 
 Tasks:
-1. Determine if the answer is a genuine attempt at answering the question. A generic greeting ("hello", "bye") or completely irrelevant/off-topic text must be considered a FAIL.
-2. If it is a valid attempt (worthy of a score of 1 or higher), begin your response exactly with the tag [PASS]. Then give a score (1-10), 2 strengths, and 2 improvements.
-3. If it is an irrelevant answer or invalid, begin your response exactly with the tag [FAIL]. Then politely ask the candidate to provide a proper answer to the question.
+1. Determine if the answer is valid.
+2. If valid → start with [PASS], give score (1-10), 2 strengths, 2 improvements.
+3. If invalid → start with [FAIL] and ask for proper answer.
 
-Very important: Your response MUST start exactly with either [PASS] or [FAIL]. Keep it short and professional.
+Response MUST start with [PASS] or [FAIL].
 """
 
 # 🌐 Serve frontend
@@ -58,7 +54,7 @@ Very important: Your response MUST start exactly with either [PASS] or [FAIL]. K
 def home():
     return send_from_directory('.', 'index.html')
 
-# 🚀 Start
+# 🚀 Start interview
 @app.route("/api/start", methods=["POST"])
 def start():
     session_id = str(uuid4())
@@ -74,7 +70,7 @@ def start():
         "question": INTERVIEW_STEPS[0]["question"]
     })
 
-# 💬 Chat
+# 💬 Chat endpoint
 @app.route("/api/chat", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -95,67 +91,71 @@ def chat():
 
     step = session["step"]
 
-    if int(step) >= len(INTERVIEW_STEPS):
+    if step >= len(INTERVIEW_STEPS):
         session["completed"] = True
         return jsonify({"message": "Interview completed!"})
 
     question = INTERVIEW_STEPS[step]["question"]
 
-    # 🧠 Gemini call
+    # 🤖 Gemini API call
     try:
-        prompt = build_prompt(question, message, "")
+        prompt = build_prompt(question, message)
 
         response = genai_client.models.generate_content(
             model=model_name,
             contents=prompt
         )
 
-    # Extract text from response
-        if hasattr(response, 'text') and response.text:
+        # Extract response text safely
+        if hasattr(response, "text") and response.text:
             ai_reply = response.text
-        elif hasattr(response, 'candidates') and response.candidates:
-            candidate = response.candidates[0]
-            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                ai_reply = ''.join(part.text for part in candidate.content.parts if hasattr(part, 'text'))
-            else:
-                ai_reply = str(candidate)
+        elif hasattr(response, "candidates") and response.candidates:
+            parts = response.candidates[0].content.parts
+            ai_reply = "".join([p.text for p in parts if hasattr(p, "text")])
         else:
             ai_reply = str(response)
+
     except Exception as e:
         print("🔥 ERROR:", e)
-        ai_reply = f"[PASS] {e}" # default to pass on error to avoid getting totally stuck
+        ai_reply = "[PASS] Temporary issue, proceeding..."
 
+    # 🧠 Process response
     passed = "[PASS]" in ai_reply
-    ai_reply_clean = ai_reply.replace("[PASS]", "").replace("[FAIL]", "").strip()
+    clean_reply = ai_reply.replace("[PASS]", "").replace("[FAIL]", "").strip()
 
     if passed:
-        # Save and increment only if passed
         session["answers"].append({
-            "q": question,
-            "a": message,
-            "feedback": ai_reply_clean
+            "question": question,
+            "answer": message,
+            "feedback": clean_reply
         })
+
         session["step"] += 1
 
-        # End if completed
-        if session["step"] == len(INTERVIEW_STEPS):
+        if session["step"] >= len(INTERVIEW_STEPS):
             session["completed"] = True
             return jsonify({
-                "message": "Interview completed! Thank you for your time.",
+                "message": "Interview completed!",
                 "responses": session["answers"],
-                "reply": ai_reply_clean
+                "reply": clean_reply
             })
 
         next_q = INTERVIEW_STEPS[session["step"]]["question"]
+
         return jsonify({
-            "reply": ai_reply_clean,
+            "reply": clean_reply,
             "next_question": next_q
         })
+
     else:
-        # Treat as invalid attempt, don't increment step, don't send next_question
         return jsonify({
-            "reply": ai_reply_clean,
+            "reply": clean_reply
         })
 
+
+# 🚀 Render-compatible run
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000))
+    )
