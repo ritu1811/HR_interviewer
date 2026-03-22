@@ -1,5 +1,6 @@
 # Node modules
 node_modules/
+frontend/node_modules/
 
 # Python caching
 __pycache__/
@@ -9,16 +10,18 @@ __pycache__/
 
 # Environment variables
 .env
-.env.local
 .env.*
-
-# OS generated files
-.DS_Store
-Thumbs.db
+api/.env
+frontend/.env.local
 
 # Build outputs
-/frontend/dist/
-/backend/build/
+dist/
+frontend/dist/
+backend/build/
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # IDE files
 .vscode/

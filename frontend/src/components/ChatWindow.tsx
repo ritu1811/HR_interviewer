@@ -36,6 +36,8 @@ const ChatWindow: React.FC = () => {
       set(messagesState, [initialMessage]);
     } catch (error) {
       set(errorState, 'Failed to start interview. Please refresh and try again.');
+    } finally {
+      set(isLoadingState, false);
     }
   }, []);
 
