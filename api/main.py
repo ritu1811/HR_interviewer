@@ -75,7 +75,7 @@ def start():
     })
 
 # 💬 Chat endpoint
-@app.route("/api/chat", methods=["POST", "OPTIONS"])
+@app.route("/api/chat", methods=["POST"])
 def chat():
     data = request.get_json()
 
